@@ -27,4 +27,4 @@ More detailed usage can be found at in `index.html` although the documentation i
 
 Copyright 2009-2014 [Ben Pickles](http://benpickles.com/). See [MIT-LICENCE](https://github.com/benpickles/peity/blob/master/MIT-LICENCE) for details.
 
-Copyright 2014 Fred Morel. See [MIT-LICENCE](https://github.com/fmorel90/peity/blob/master/MIT-LICENCE) for details.
+Copyright 2014 Fred Morel. See [MIT-LICENCE](https://github.com/fmorel90/canvis/blob/master/MIT-LICENCE) for details.
