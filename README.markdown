@@ -1,4 +1,4 @@
-# Peity
+# CanVis
 
 
 CanVis is a simple jQuery plugin that converts an element's content into a `<canvas>` bar/line/step or pie chart. A fork of the Peity library, it retains the use of canvas instead of svg in order to work within a Caja environment like Google Apps Script's HTML Service. Although it still works for small inline charts, its new purpose is to create dashboards.
