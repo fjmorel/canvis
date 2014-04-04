@@ -1,7 +1,7 @@
 {
-  "name": "peity",
-  "version": "2.0.2",
-  "main": "jquery.peity.js",
+  "name": "canvis",
+  "version": "0.9.0",
+  "main": "jquery.canvis.js",
   "dependencies": {
     "jquery": ">=1.6.2"
   }

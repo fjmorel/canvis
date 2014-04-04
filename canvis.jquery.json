@@ -1,0 +1,26 @@
+{
+  "author": {
+    "name": "Fred Morel",
+    "url": "https://github.com/fmorel90"
+  },
+  "bugs": "https://github.com/fmorel90/canvis/issues",
+  "dependencies": {
+    "jquery": ">=1.6.2"
+  },
+  "description": "Progressive <canvas> bar/line/step and pie charts.",
+  "keywords": [
+    "chart",
+    "graph",
+    "sparkline",
+    "canvas"
+  ],
+  "licenses": [
+    {
+      "type": "MIT",
+      "url": "http://opensource.org/licenses/MIT"
+    }
+  ],
+  "name": "canvis",
+  "title": "CanVis",
+  "version": "0.9.0"
+}
