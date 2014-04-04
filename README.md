@@ -15,8 +15,8 @@ CanVis is a simple jQuery plugin that converts an element's content into a `<can
 ### Javascript (jQuery)
 
 ```js
-$("span.pie").peity("pie");
-$("span.combo").peity("combo");
+$("span.pie").canvis("pie");
+$("span.combo").canvis("combo");
 ```
 
 ## Docs
