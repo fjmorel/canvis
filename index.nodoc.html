@@ -22,7 +22,6 @@
     <script src="jquery.canvis.js"></script>
     <script>
         $(function() {
-
             //Pie charts
             $(".pie").canvis("pie");
             $("#pie-1").canvis("pie", { diameter: 48, fill: ["red", "blue"] });
@@ -52,7 +51,7 @@
             });
 
             //Multi-series bar charts
-            $(".bars").canvis("combo", { width: 250, height: 300, focus: { width: 1, color: "#000" }, seriesGap: 1, gap: 4, labels: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"], series: [{ type: "bar", color: ["#48f"] }, { type: "bar", color: ["#f90"] }] });
+            $(".bars").canvis("combo", { width: 250, height: 300, focus: { width: 1, color: "#000" }, seriesGap: 1, gap: 4, labels: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"], series: [{ name : "Bluebell", type: "bar", color: ["#48f"] }, { name : "Desert", type: "bar", color: ["#f90"] }] });
 
 
             // Using data attributes

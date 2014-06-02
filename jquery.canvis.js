@@ -10,6 +10,11 @@
 (function($, Math, pluginName, mouseData) {
 	var canvasSupported = document.createElement("canvas").getContext;
 
+	//Create object with defaults and drawers
+	var CanVis = function($el, type, opt) { this.$el = $el; this.type = type; this.opt = opt; };
+	//Minifies references to the prototype
+	var CanVisPrototype = CanVis.prototype;
+
 	var canvis = $.fn.canvis = function(type, options) {
 		if(canvasSupported) {
 			this.each(function() {
@@ -43,12 +48,6 @@
 		return this;
 	};
 
-	//Create object with defaults and drawers
-	var CanVis = function($el, type, opt) { this.$el = $el; this.type = type; this.opt = opt; };
-
-	//Minifies references to the prototype
-	var CanVisPrototype = CanVis.prototype;
-
 	CanVisPrototype.draw = function() { canvis.graphers[this.type].call(this, this.opt); };
 
 	//Prepare a canvas element to draw on
@@ -58,13 +57,14 @@
 
 		//If pre-existing canvas, clear it, otherwise create it.
 		if(!canvas) {
-			self.canvas = canvas = $("<canvas/>",{class:'canvis'})[0];
-			self.context = canvas.getContext("2d");
+			self.canvas = canvas = $("<canvas/>", { class: pluginName })[0];
+			self.context = canvas.getContext("2d", {alpha: false});
 			self.$el.hide().removeData(mouseData).after(canvas);
 		}
 		canvas.width = width;//Reset width to clear it instead of drawing blank rectangle. Fixes flicker in Firefox
 		canvas.height = height;
-		$(canvas).css({ height: height, width: width }).data(pluginName, self).off();
+		Drawers.rect(self.context, 0, 0, width, height, "#fff", 0);//Draw white background. Necessary since canvas is opaque black with alpha:false option.
+		$(canvas).css({ height: height, width: width }).data(pluginName, self);
 		return canvas;
 	};
 
@@ -74,20 +74,20 @@
 		var parser = function(e) { return parseFloat(e); };
 		var delims = arguments;
 		var text = this.$el.text().split(delims[0]);
-		if(delims.length === 1) return text.map(parser);
+		if(delims.length === 1) { return text.map(parser); }
 		return text.map(function(e) { return e.split(delims[1]).map(parser); });
 	};
 
 	//Default properties for an axis/tooltip (font color and size, plus label formatter)
-	var DefaulTextProperties = { color: "#000", size: 13, formatter: function(e) { return e; } };
+	var DefaulTextProperties = function() { return { color: "#000", size: 13, formatter: function(e) { return e; } }; };
 	//Some common code that's not categorized
 	var Helpers = {
 		//Figures out how many levels a label will take (split by space)
 		labelLevels: function(labels) { return Math.max.apply(this, labels.map(function(e) { return e.replace(/[^ ]/g, "").length; })) + 1; },
 		//Given values and formatter, returns strings for text output
 		toString: function(values, formatter) {
-			if(formatter) return values.map(function(e) { return formatter(e) + ""; });
-			return values.map(function(e) { return e + ""; });
+			if(formatter) { return values.map(function(e) { return "" + formatter(e); }); }
+			return values.map(function(e) { return "" + e; });
 		},
 		//Function to extract given property from object
 		extractor: function(propName) { return function(e) { return e[propName]; }; },
@@ -113,28 +113,26 @@
 		getWidth: function(context, string) { return context.measureText(string).width; }
 	};
 
-	//Events for point hover
-	var Events = {
-		//Redraw chart with hover effect based on mouse position
-		hover: function(evt) {
+	//Add event listeners to charts to redraw hover effects
+	CanVisPrototype.addEvents = function() {
+		$(this.canvas).on('mousemove mouseout', function(evt) {
 			var rect = this.getBoundingClientRect();
 			$(this).off().prev().data(mouseData, JSON.stringify({ x: evt.clientX - rect.left, y: evt.clientY - rect.top })).change();
-		},
-		//Redraw chart with no hover effect
-		exit: function() { $(this).off().prev().removeData(mouseData).change(); }
+		});
 	};
-
-	//Add event listeners to pie and bar charts to redraw hover effects
-	var addEvents = function(node) { $(node).on('mousemove', Events.hover).on('mouseout', Events.hover); };
 
 	//Function to draw specific items
 	var Drawers = {
-		arc: function(context, x, y, r, start, end, color, width) {
-			context.beginPath();
-			context.arc(x, y, r, start, end, true);//true = counterclockwise
+		strokeLine_ : function(context, width, color){
 			context.lineWidth = width;
 			context.strokeStyle = color;
 			context.stroke();
+		},
+		arc: function(context, x, y, r, start, end, color, width) {
+			//x & y are center coordinates. r = radius. start & end are radians for arc. Color & width for stroke
+			context.beginPath();
+			context.arc(x, y, r, start, end, true);//true = counterclockwise
+			Drawers.strokeLine_(context, width, color);
 		},
 		circle: function(context, x, y, r, start, end, color) {
 			context.beginPath();
@@ -145,13 +143,12 @@
 		},
 		line: function(context, points, color, width) {
 			context.beginPath();
-			context.moveTo(points[0].x, points[0].y);
-			for(var i = 1; i < points.length; i++) { context.lineTo(points[i].x, points[i].y); }
-			context.lineWidth = width;
-			context.strokeStyle = color;
-			context.stroke();
+			for(var i = 0; i < points.length; i++) { context.lineTo(Math.round(points[i].x), Math.round(points[i].y)); }
+			Drawers.strokeLine_(context, width, color);
 		},
 		rect: function(context, x, y, width, height, fill, strokeWidth, stroke) {
+			x=Math.round(x);y=Math.round(y);
+			width=Math.round(width);height=Math.round(height);
 			if(fill) {
 				context.fillStyle = fill;
 				context.fillRect(x, y, width, height);
@@ -166,15 +163,16 @@
 	};
 
 	//Draw tooltip for hovered value(s)
-	Drawers.tooltip = function(context, x, y, values, colors, fontSize, fontColor, valueFormatter, label, labelFormatter) {
+	Drawers.tooltip = function(context, x, y, values, names, colors, fontSize, fontColor, valueFormatter, label, labelFormatter) {
 		//Set properties
 		context.font = fontSize + "px sans-serif";
 		context.textAlign = "left";
 		context.textBaseline = "top";
 
 		//Convert values to labels and measure longest
-		values = Helpers.toString(values, valueFormatter);
-		if(label) values.splice(0, 0, Helpers.toString([label], labelFormatter)[0]);
+		values = Helpers.toString(values, valueFormatter).map(function(e, i) { return e !== "" ? names[i] !== "" ? names[i] + ": " + e : e : ""; });
+		if(label) { values.splice(0, 0, Helpers.toString([label], labelFormatter)[0]); }
+		values = values.filter(function(e) { return e !== ""; });
 		var textWidth = Math.max.apply([], values.map(function(e) { return Helpers.getWidth(context, e); }));
 		var blockWidth = Helpers.getWidth(context, "■");
 		var totalLabelWidth = textWidth + blockWidth;
@@ -183,10 +181,10 @@
 		x -= 6;
 		var ySize = values.length * fontSize;
 		if(y > ySize - 6) { y -= ySize; }
-		if(x <= totalLabelWidth + 7) { x += totalLabelWidth + 20 + 7; }
+		if(x <= totalLabelWidth + 9) { x += totalLabelWidth + 20 + 9; }
 
 		//Draw outlined rectangle for tooltip
-		Drawers.rect(context, x - totalLabelWidth - 4, y - 3, totalLabelWidth + 7, ySize + 8, "#fff", 1, "#000");
+		Drawers.rect(context, x - totalLabelWidth - 6, y - 3, totalLabelWidth + 8, ySize + 8, "#fff", 1, "#000");
 
 		//Draw each label
 		if(label) {
@@ -195,7 +193,7 @@
 			y += fontSize;
 		}
 		values.forEach(function(e, i) {
-			if(e === "") return;
+			if(e === "") { return; }
 			var labelY = y + i * fontSize;
 			context.fillStyle = colors[i % colors.length];
 			context.fillText("■", x - totalLabelWidth - 3, labelY);
@@ -215,8 +213,8 @@
 		focus: { color: "#000", width: 0 },
 		delimiter: null,
 		diameter: 16,
-		tooltip: DefaulTextProperties,
-		label : DefaulTextProperties
+		tooltip: DefaulTextProperties(),
+		label: DefaulTextProperties()
 	},
 		function(opt) {
 			var self = this;
@@ -250,13 +248,13 @@
 			var fill = Helpers.toFunction(opt.fill);
 			var tooltip = opt.tooltip;
 			var label = opt.label;
-			var focusI;
+			var focusI, polarHover;
 			//Identify labels and height needed to display them
 			var labels = opt.labels;
 			if(labels) { labels = Helpers.toString(labels); }
 
 			if(focus.width && hoverPos) {
-				var polarHover = JSON.parse(hoverPos);
+				polarHover = JSON.parse(hoverPos);
 				//x and y are position from top left. r and a are radius and angle from center
 				//Move origin from 0,0 to center of canvas
 				polarHover.x -= width / 2;
@@ -265,8 +263,8 @@
 				//Find polar coordinates
 				polarHover.r = Math.sqrt(polarHover.x * polarHover.x + polarHover.y * polarHover.y);
 				polarHover.a = Math.atan2(polarHover.y, polarHover.x);
-				while(polarHover.a < 0) polarHover.a += tau;
-				while(polarHover.a > tau) polarHover.a -= tau;
+				while(polarHover.a < 0) { polarHover.a += tau; }
+				while(polarHover.a > tau) { polarHover.a -= tau; }
 			}
 
 			//Save state and then move axes to be in center
@@ -293,9 +291,9 @@
 					//Refetch in order to reset origin
 					hoverPos = JSON.parse(hoverPos);
 					context.restore();
-					Drawers.tooltip(context, hoverPos.x, hoverPos.y, [values[focusI]], [fill.call(self, values[focusI], focusI, values)], tooltip.size, tooltip.color, tooltip.formatter, labels ? labels[focusI] : undefined, label.formatter);
+					Drawers.tooltip(context, hoverPos.x, hoverPos.y, [values[focusI]], [opt.name || ""], [fill.call(self, values[focusI], focusI, values)], tooltip.size, tooltip.color, tooltip.formatter, labels ? labels[focusI] : undefined, label.formatter);
 				}
-				addEvents(canvas);
+				self.addEvents();
 			}
 		}
 	);
@@ -306,7 +304,7 @@
 		delimiters: ["|", ","],
 		height: 50, width: 200, left: 0, gap: 1, seriesGap: 0,
 		max: null, min: 0,
-		xAxis: DefaulTextProperties, yAxis: DefaulTextProperties, tooltip: DefaulTextProperties,
+		xAxis: DefaulTextProperties(), yAxis: DefaulTextProperties(), tooltip: DefaulTextProperties(),
 		focus: { color: "#000", width: 0 },
 		gridlines: { widths: [1, 0], colors: ["#000", "#bbb"] }
 	},
@@ -320,7 +318,7 @@
 			var values = self.values.apply(self, opt.delimiters);
 			var seriesNum = values.length;
 			var allValues = [].concat.apply([opt.max, opt.min], values);
-			var value, i, j, y;
+			var value, i, j, y, pieces;
 
 			//Identify labels and height needed to display them
 			var labels = opt.labels;
@@ -331,13 +329,13 @@
 			}
 
 			//Find range of values
-			var maxLength = Math.max.apply(Math, values.map(function(e){ return e.length; }));
+			var maxLength = Math.max.apply(Math, values.map(function(e) { return e.length; }));
 			var max = Math.max.apply(Math, allValues);
 			var min = Math.min.apply(Math, allValues);
 			var range = max - min;
 			var region = opt.region || (range / 5);
-			if(max !== 0) max = Math.ceil(max + region / 2);
-			if(min !== 0) min = Math.floor(min - region / 2);
+			if(max !== 0) { max = Math.ceil(max + region / 2); }
+			if(min !== 0) { min = Math.floor(min - region / 2); }
 			range = (max - min) || 1;
 			region = opt.region || (range / 5);
 
@@ -355,7 +353,7 @@
 			var hoverPos = self.$el.data(mouseData);
 			var canvas = self.createCanvas(opt.width, opt.height);
 			var context = self.context;
-
+			
 			//Size
 			var fullWidth = canvas.width;
 			var fullHeight = canvas.height;
@@ -391,22 +389,22 @@
 					if(left) {
 						//Draw label (align based on position near edge
 						context.textBaseline = y > yAxis.size / 2 ? y > height - yAxis.size / 2 ? "bottom" : "middle" : "top";
-						context.fillText(yAxis.formatter(value) + "", left - 2, y);
+						context.fillText("" + yAxis.formatter(value), left - 2, y);
 					}
 				}
 			}
 
 			//Loop through values and draw each bar
-			var boxes = [], box, barSeries = -1, currentBoxes, currentValues, currentType, currentSeries, currentColors;
+			var boxes = [], box, barSeriesIndex = -1, currentBoxes, currentValues, currentType, currentSeries, currentColors;
 			var midpoints = [];
-			for(i = 0; i < maxLength; i++) midpoints.push(left + (gap + xQuotient) * (1 / 2 + i));
-			for(i = 0; i < values.length; i++) {
+			for(i = 0; i < maxLength; i++) { midpoints.push(left + (gap + xQuotient) * (1 / 2 + i)); }
+			for(i = 0; i < seriesNum; i++) {
 				currentValues = values[i];
 				currentSeries = series[i];
 				currentColors = currentSeries.color = Helpers.toFunction(currentSeries.color);
 				currentType = currentSeries.type;
-				
-				if(currentType === typeBar) barSeries++;
+
+				if(currentType === typeBar) { barSeriesIndex++; }
 				currentBoxes = [];
 				for(j = 0; j < currentValues.length; j++) {
 					value = currentValues[j];
@@ -414,22 +412,23 @@
 					if(currentType === typeBar) {
 						box = {
 							//left margin + group*groupWidth + groupWidth/#series*series + groupMargin
-							x: left + gap / 2 + j * (gap + xQuotient) + xQuotient / barSeriesNum * barSeries,//x
+							x: left + gap / 2 + j * (gap + xQuotient) + xQuotient / barSeriesNum * barSeriesIndex,//x
 							y: y,//y
 							//groupWidth/#series
 							w: xQuotient / barSeriesNum - seriesGap / 2,//w
 							h: value === 0 ? 1 : yQuotient * value//h
 						};
 						Drawers.rect(context, box.x, box.y, box.w, box.h, currentColors.call(self, value, j, currentValues), 0);
-					} else box = { x: midpoints[j], y: y };
-					currentBoxes[j]=box;
-	
-					if(currentType === typeStep && value)
-						Drawers.line(context, [{ x: midpoints[j] - xQuotient / 2 * .62, y: y }, { x: midpoints[j] + xQuotient / 2 * .62, y: y }], currentColors.call(self, value, j, currentValues), currentSeries.width);
+					} else { box = { x: midpoints[j], y: y }; }
+					currentBoxes[j] = box;
+
+					if(currentType === typeStep && value) {
+						Drawers.line(context, [{ x: midpoints[j] - xQuotient / 2 * 0.62, y: y }, { x: midpoints[j] + xQuotient / 2 * 0.62, y: y }], currentColors.call(self, value, j, currentValues), currentSeries.width);
+					}
 				}
 				//Draw full line
 				if(currentType === typeLine) {
-					for(j = 0; j < currentBoxes.length; j++) Drawers.circle(context, currentBoxes[j].x, currentBoxes[j].y, currentSeries.points, 0, 2 * Math.PI, currentColors.call(self, currentValues[j], j, currentValues));
+					for(j = 0; j < currentBoxes.length; j++) { Drawers.circle(context, currentBoxes[j].x, currentBoxes[j].y, currentSeries.points, 0, 2 * Math.PI, currentColors.call(self, currentValues[j], j, currentValues)); }
 					Drawers.line(context, currentBoxes, currentColors.call(self, currentValues[0], 0, currentValues), currentSeries.width);
 				}
 
@@ -438,14 +437,13 @@
 
 			//Draw x-axis
 			if(levels) {
-				var i, j, pieces;
 				context.fillStyle = xAxis.color;
 				context.font = xAxis.size + "px sans-serif";
 				context.textBaseline = "top";
 				context.textAlign = "center";
 				for(i = 0; i < midpoints.length; i++) {
 					pieces = labels[i].split(" ");
-					for(j = 0; j < pieces.length; j++) context.fillText(pieces[j], midpoints[i], height + 1 + j * xAxis.size);
+					for(j = 0; j < pieces.length; j++) { context.fillText(pieces[j], midpoints[i], height + 1 + j * xAxis.size); }
 				}
 			}
 
@@ -460,16 +458,17 @@
 						if(hoverPos.x >= midpoints[j] - xQuotient / 2 && hoverPos.x <= midpoints[j] + xQuotient / 2) {
 							//If mouse is within a bar, draw a focus
 							for(i = 0; i < boxes.length; i++) {
-								if(series[i].type === typeBar)
+								if(series[i].type === typeBar) {
 									Drawers.rect(context, boxes[i][j].x - focus.width / 2, boxes[i][j].y - focus.width / 2, boxes[i][j].w + focus.width, boxes[i][j].h + focus.width, undefined, focus.width, focus.color);
+								}
 							}
-							Drawers.tooltip(context, hoverPos.x, hoverPos.y, values.map(Helpers.extractor(j)), values.map(function(e, i) { return series[i].color.call(self, e[j], j, e); }), tooltip.size, tooltip.color, tooltip.formatter, labels ? labels[j] : undefined, xAxis.formatter);
+							Drawers.tooltip(context, hoverPos.x, hoverPos.y, values.map(Helpers.extractor(j)), series.map(function(e) { return e.name || ""; }), values.map(function(e, i) { return series[i].color.call(self, e[j], j, e); }), tooltip.size, tooltip.color, tooltip.formatter, labels ? labels[j] : undefined, xAxis.formatter);
 							break;//Don't analyze other values
 						}
 					}
 
 				}
-				addEvents(canvas);
+				self.addEvents();
 			}
 		}
 	);
