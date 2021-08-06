@@ -1,3 +1,5 @@
+**⚠️ This project is not supported and should not be used. Google Apps Script has come a long way since this was created, and a lot more JavaScript is now usable in that environment, making this unnecessary. ⚠️**
+
 # CanVis
 
 
